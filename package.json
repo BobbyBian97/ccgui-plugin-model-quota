@@ -1,0 +1,11 @@
+{
+  "name": "ccgui-plugin-model-quota",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "description": "CC GUI 插件：输入框状态栏显示 GLM Coding Plan / OpenCode Go 额度胶囊",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "license": "MIT"
+}
