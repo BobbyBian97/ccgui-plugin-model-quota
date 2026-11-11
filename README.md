@@ -35,6 +35,7 @@
 | `ui:settings-section` | 提供插件设置页（Key、数据源、刷新） |
 | `storage` | 在本机插件私有 KV 保存 API Key 与最近一次成功数据 |
 | `events` | 订阅 `session://activated` / `session://selection-changed` 以跟随当前会话渠道 |
+| `host:models` | 读取本机渠道目录，把会话事件里的渠道 UUID 换成显示名（识别 GLM / OpenCode），只读、不出网 |
 | `network:open.bigmodel.cn` | 查询智谱 GLM 国内额度 |
 | `network:api.z.ai` | 查询智谱 GLM 海外额度 |
 | `network:opencode.ai` | 查询 OpenCode Go 额度 |

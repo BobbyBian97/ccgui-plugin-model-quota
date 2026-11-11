@@ -1,7 +1,7 @@
 {
   "id": "model-quota",
   "name": "模型额度胶囊",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "minAppVersion": "1.1.9",
   "author": "BobbyBian97",
   "description": "在输入框状态栏用胶囊显示当前会话模型所在渠道的 5 小时 / 周 / 月额度（已用百分比，悬浮看剩余），支持智谱 GLM Coding Plan 与 OpenCode Go。",
@@ -14,6 +14,7 @@
     "ui:settings-section",
     "storage",
     "events",
+    "host:models",
     "network:open.bigmodel.cn",
     "network:api.z.ai",
     "network:opencode.ai"

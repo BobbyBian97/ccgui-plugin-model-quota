@@ -250,11 +250,15 @@ function providerKey(config, id) {
 }
 
 // 当前会话用哪个数据源：provider 名称/ID 优先，其次模型名；null = 会话信息未知
-function detectProvider(selection) {
+// providerNames: 宿主目录给的「渠道 id(UUID) → 显示名」映射（会话事件只带 UUID）
+function detectProvider(selection, providerNames) {
   if (!selection || typeof selection !== "object") return null;
-  const provider = typeof selection.provider === "string" ? selection.provider.toLowerCase() : "";
+  let provider = typeof selection.provider === "string" ? selection.provider.toLowerCase() : "";
   const model = typeof selection.model === "string" ? selection.model.toLowerCase() : "";
   if (!provider && !model) return null;
+  if (provider && providerNames && providerNames[provider]) {
+    provider = String(providerNames[provider]).toLowerCase();
+  }
   if (provider.indexOf("opencode") >= 0) return "opencode";
   if (
     provider.indexOf("glm") >= 0 ||
@@ -279,11 +283,11 @@ function configuredProviders(config) {
   return out;
 }
 
-function resolveActiveProvider(config, session) {
+function resolveActiveProvider(config, session, providerNames) {
   if (!config) return "glm";
   if (config.source === "glm") return "glm";
   if (config.source === "opencode") return "opencode";
-  const detected = detectProvider(session);
+  const detected = detectProvider(session, providerNames);
   const configured = configuredProviders(config);
   if (detected === "glm" || detected === "opencode") return detected;
   if (detected === "other") {
@@ -559,6 +563,43 @@ export default function activate(ctx) {
     }
   }
 
+  // ---- 渠道目录：会话事件只带渠道 UUID，靠宿主目录换成显示名再识别 ----
+
+  let providerNames = {};
+  let catalogAt = 0;
+
+  function loadProviderCatalog() {
+    if (typeof ctx.models === "undefined" || !ctx.models || typeof ctx.models.catalog !== "function") return;
+    catalogAt = Date.now();
+    void Promise.resolve()
+      .then(function () {
+        return ctx.models.catalog();
+      })
+      .then(function (cat) {
+        const map = {};
+        const engines = (cat && cat.engines) || [];
+        for (let i = 0; i < engines.length; i++) {
+          const sources = engines[i] && engines[i].sources;
+          for (let j = 0; sources && j < sources.length; j++) {
+            const src = sources[j];
+            if (src && typeof src.id === "string" && typeof src.name === "string") {
+              map[src.id.toLowerCase()] = src.name;
+            }
+          }
+        }
+        providerNames = map;
+        syncActive(true); // 目录晚到：重新解析当前会话并按需刷新
+      })
+      .catch(function () {
+        /* 目录不可用：退回名称/模型启发式 */
+      });
+  }
+
+  function ensureProviderCatalog() {
+    if (Date.now() - catalogAt < 60000) return;
+    loadProviderCatalog();
+  }
+
   // ---- 配置与缓存加载 ----
 
   const ready = (async function () {
@@ -592,16 +633,23 @@ export default function activate(ctx) {
         glm: quotas.glm ? quotas.glm.fetchedAt : 0,
         opencode: quotas.opencode ? quotas.opencode.fetchedAt : 0,
       },
-      activeProvider: resolveActiveProvider(config, store.get().session),
+      activeProvider: resolveActiveProvider(config, store.get().session, providerNames),
     });
   })();
+
+  loadProviderCatalog();
 
   // ---- 会话选择事件（保留话题，订阅即回放当前会话） ----
 
   function syncActive(triggerRefresh) {
-    const next = resolveActiveProvider(config, store.get().session);
+    const next = resolveActiveProvider(config, store.get().session, providerNames);
     const previous = store.get().activeProvider;
     store.set({ activeProvider: next });
+    // 会话渠道是目录里没有的 UUID（新加渠道 / 目录尚未就绪）：刷新目录后再解析
+    const session = store.get().session;
+    if (next === null && session && session.provider && !providerNames[session.provider.toLowerCase()]) {
+      ensureProviderCatalog();
+    }
     if (triggerRefresh && refCount > 0 && next && next !== previous) {
       void refreshProvider(next, false).finally(function () {
         scheduleNext(POLL_INTERVAL_MS);
@@ -992,7 +1040,7 @@ export default function activate(ctx) {
         quotas: { glm: null, opencode: null },
         errors: { glm: null, opencode: null },
         lastSuccessAt: { glm: 0, opencode: 0 },
-        activeProvider: resolveActiveProvider(next, store.get().session),
+        activeProvider: resolveActiveProvider(next, store.get().session, providerNames),
       });
       setSource("auto");
       setGlmKey("");
